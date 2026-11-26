@@ -49,4 +49,13 @@ jobs:
         run: |
           $files = @((Get-ChildItem build/installer/*.exe).FullName) + (Resolve-Path build/gotiengviet.exe).Path
           $pre = if ($env:GITHUB_REF_NAME -match '-') { '--prerelease' } else { $null }
-          gh release create $env:GITHUB_REF_NAME @files --title "gotiengviet $env:GTV_VERSION" --generate-notes $pre
+          # Ghi chú lấy từ .github/release-notes.md ({version} thay bằng số phiên bản); không có file thì GitHub tự tạo.
+          $notes = '.github/release-notes.md'
+          if (Test-Path $notes) {
+            $text = [IO.File]::ReadAllText($notes).Replace('{version}', $env:GTV_VERSION)
+            [IO.File]::WriteAllText("$PWD/notes.md", $text, [Text.UTF8Encoding]::new($false))
+            $noteArgs = @('--notes-file', 'notes.md')
+          } else {
+            $noteArgs = @('--generate-notes')
+          }
+          gh release create $env:GITHUB_REF_NAME @files --title "gotiengviet $env:GTV_VERSION" @noteArgs $pre
