@@ -1,0 +1,52 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Inno Setup
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) {
+            choco install innosetup -y --no-progress
+          }
+
+      - name: Phiên bản
+        shell: pwsh
+        run: |
+          $v = if ($env:GITHUB_REF_TYPE -eq 'tag') { $env:GITHUB_REF_NAME.TrimStart('v') } else { '0.0.0-dev' }
+          "GTV_VERSION=$v" >> $env:GITHUB_ENV
+
+      - name: Build, test, bản cài
+        shell: cmd
+        run: build.bat
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gotiengviet-${{ env.GTV_VERSION }}
+          path: |
+            build/gotiengviet.exe
+            build/installer/*.exe
+          if-no-files-found: error
+
+      - name: GitHub Release
+        if: github.ref_type == 'tag'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $files = @((Get-ChildItem build/installer/*.exe).FullName) + (Resolve-Path build/gotiengviet.exe).Path
+          $pre = if ($env:GITHUB_REF_NAME -match '-') { '--prerelease' } else { $null }
+          gh release create $env:GITHUB_REF_NAME @files --title "gotiengviet $env:GTV_VERSION" --generate-notes $pre

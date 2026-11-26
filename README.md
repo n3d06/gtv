@@ -47,6 +47,12 @@ build\gotiengviet.exe --selftest   :: giả lập gõ vào ô EDIT và RichEdit,
 
 Selftest chỉ gõ khi cửa sổ thử của nó đang có focus, nên không gõ nhầm vào app khác. Chưa có phím tắt bật/tắt và icon khay (Giai đoạn 5): chạy là gõ tiếng Việt ngay, thoát bằng Task Manager hoặc Ctrl+C khi chạy với `--log`.
 
+## Tải và cài
+
+Tải `gotiengviet-<phiên bản>-setup.exe` ở trang [Releases](https://github.com/n3d06/gtv/releases). Bản cài cài theo người dùng (không cần quyền admin) vào `%LOCALAPPDATA%\Programs\gotiengviet`; gỡ trong Settings > Apps sẽ xóa sạch khóa Run, task admin, registry và `%APPDATA%\gotiengviet`. Exe chưa ký số nên Windows SmartScreen có thể cảnh báo.
+
+GitHub Actions build và chạy test ở mỗi lần push; push tag `v*` (ví dụ `v0.1.0`) thì tạo Release kèm bản cài, tag có dấu `-` (ví dụ `v0.1.0-beta.1`) là bản thử.
+
 ## Dùng
 
 - Icon dưới khay: **V** đỏ là tiếng Việt, **E** xám là tiếng Anh. Click trái để đổi.

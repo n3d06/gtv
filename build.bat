@@ -34,3 +34,12 @@ for %%f in (%SRC%) do call set "CSRC=%%CSRC%% src\%%f.c" & call set "OBJS=%%OBJS
 cl %CFLAGS% %NOCRT% /c /Fo:build\ %CSRC% || exit /b 1
 link /nologo /NODEFAULTLIB /ENTRY:start /SUBSYSTEM:WINDOWS /OPT:REF /OPT:ICF /OUT:build\gotiengviet.exe %OBJS% %LIBS% || exit /b 1
 echo Da build build\gotiengviet.exe
+
+rem ---- Ban cai (neu da cai Inno Setup 6) ----
+set "ISCC="
+for %%p in ("%ProgramFiles(x86)%\Inno Setup 6\ISCC.exe" "%ProgramFiles%\Inno Setup 6\ISCC.exe" "%LOCALAPPDATA%\Programs\Inno Setup 6\ISCC.exe") do if exist %%p set "ISCC=%%~p"
+if not defined ISCC (echo Bo qua ban cai: chua cai Inno Setup 6 & exit /b 0)
+set "ISSDEF="
+if defined GTV_VERSION set "ISSDEF=/DAppVersion=%GTV_VERSION%"
+"%ISCC%" /Q %ISSDEF% installer\gotiengviet.iss || exit /b 1
+echo Da build build\installer
