@@ -1,4 +1,4 @@
-/* Icon khay (chữ V/E rỗng, màu theo theme taskbar), menu, trả bớt bộ nhớ định kỳ. */
+/* Icon khay (chữ V/E rỗng, màu theo theme taskbar), âm báo bật/tắt, menu, trả bớt bộ nhớ định kỳ. */
 #include "gtv.h"
 #include <shellapi.h>
 
@@ -8,6 +8,7 @@
 #define ID_ADMIN 3
 #define ID_EXCLUDE_LIST 4
 #define ID_EXIT 5
+#define ID_SOUND 6
 #define ID_HOTKEY 100 /* + chỉ số trong PRESETS */
 #define TIMER_TRIM_ONCE 1
 #define TIMER_TRIM 2
@@ -19,6 +20,7 @@ static HWND g_wnd;
 static UINT g_taskbar_created;
 static HICON g_icon_v, g_icon_e;
 static NOTIFYICONDATAW g_nid;
+static int g_sound = 1;
 
 static const wchar_t APP_KEY[] = L"Software\\gotiengviet";
 static const DWORD PRESETS[] = {HOTKEY_DEFAULT, HOTKEY(HK_ALT, 'Z'), HOTKEY(HK_CTRL, VK_SPACE)};
@@ -150,6 +152,26 @@ static void save_hotkey(void)
     RegSetKeyValueW(HKEY_CURRENT_USER, APP_KEY, L"Hotkey", REG_DWORD, &v, sizeof v);
 }
 
+/* Beep của kernel32: không thêm DLL, vẫn kêu khi bộ âm thanh Windows là "No sounds".
+ * Chạy trên luồng giao diện nên không làm chậm hook. */
+static void beep(DWORD freq, DWORD ms)
+{
+    if (g_sound) Beep(freq, ms);
+}
+
+static void load_sound(void)
+{
+    DWORD v = 1, n = sizeof v;
+    if (RegGetValueW(HKEY_CURRENT_USER, APP_KEY, L"Sound", RRF_RT_REG_DWORD, 0, &v, &n) == ERROR_SUCCESS)
+        g_sound = v != 0;
+}
+
+static void save_sound(void)
+{
+    DWORD v = (DWORD)g_sound;
+    RegSetKeyValueW(HKEY_CURRENT_USER, APP_KEY, L"Sound", REG_DWORD, &v, sizeof v);
+}
+
 static void update_icon(DWORD msg)
 {
     int on = engine_enabled();
@@ -209,6 +231,7 @@ static void show_menu(void)
     wsprintfW(item, L"Gõ tiếng Việt\t%s", hotkey_name());
     AppendMenuW(m, MF_STRING | (engine_enabled() ? MF_CHECKED : 0), ID_TOGGLE, item);
     AppendMenuW(m, MF_POPUP, (UINT_PTR)keys, L"Phím tắt bật/tắt");
+    AppendMenuW(m, MF_STRING | (g_sound ? MF_CHECKED : 0), ID_SOUND, L"Âm báo");
     AppendMenuW(m, MF_STRING | (autostart_enabled() ? MF_CHECKED : 0), ID_AUTOSTART, L"Khởi động cùng Windows");
     AppendMenuW(m, MF_STRING | (engine_is_elevated() ? MF_CHECKED : 0), ID_ADMIN, L"Chạy với quyền admin");
     AppendMenuW(m, MF_STRING, ID_EXCLUDE_LIST, L"Danh sách app loại trừ");
@@ -226,6 +249,10 @@ static void show_menu(void)
     }
     switch (cmd) {
     case ID_TOGGLE: engine_toggle(); break;
+    case ID_SOUND:
+        g_sound = !g_sound;
+        save_sound();
+        break;
     case ID_AUTOSTART: autostart_set(!autostart_enabled()); break;
     case ID_ADMIN:
         if (engine_is_elevated()) {
@@ -251,6 +278,7 @@ static LRESULT CALLBACK wnd_proc(HWND w, UINT msg, WPARAM wp, LPARAM lp)
         return 0;
     case WM_GTV_STATE:
         update_icon(NIM_MODIFY);
+        beep(engine_enabled() ? 1000 : 500, 70);
         return 0;
     case WM_SETTINGCHANGE:
         if (lp && lstrcmpW((const wchar_t *)lp, L"ImmersiveColorSet") == 0) {
@@ -285,6 +313,7 @@ int tray_run(void)
 
     autostart_on_start();
     load_hotkey();
+    load_sound();
     make_icons();
     g_taskbar_created = RegisterWindowMessageW(L"TaskbarCreated");
 
