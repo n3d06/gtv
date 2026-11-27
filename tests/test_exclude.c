@@ -37,17 +37,18 @@ int main(void)
     SetEnvironmentVariableW(L"APPDATA", tmp);
 
     /* BOM UTF-8, chú thích, dòng trống, khoảng trắng, CRLF và LF */
-    write_file(file, "\xEF\xBB\xBF# chu thich\r\n  Code.exe  \r\n\r\ngame.exe\n#notepad.exe\n");
+    write_file(file, "\xEF\xBB\xBF# chu thich\r\n  A.exe  \r\n\r\nb.exe\n#c.exe\n");
     exclude_init();
-    expect("đọc code.exe (không phân biệt hoa/thường, bỏ khoảng trắng)", exclude_has(L"code.exe"));
-    expect("đọc game.exe (dòng LF)", exclude_has(L"GAME.EXE"));
-    expect("bỏ qua dòng chú thích", !exclude_has(L"notepad.exe"));
-    expect("app không có trong danh sách", !exclude_has(L"chrome.exe"));
+    expect("không phân biệt hoa/thường, bỏ khoảng trắng", exclude_has(L"a.exe"));
+    expect("đọc dòng LF", exclude_has(L"B.EXE"));
+    expect("bỏ qua dòng chú thích", !exclude_has(L"c.exe"));
+    expect("app không có trong danh sách", !exclude_has(L"d.exe"));
+    expect("đếm được 2 app", exclude_count() == 2);
 
     v = exclude_version();
     /* Người dùng sửa file bằng Notepad: nạp lại khi thời gian sửa file đổi */
     Sleep(20);
-    write_file(file, "zalo.exe\r\n");
+    write_file(file, "e.exe\r\n");
     {
         FILETIME later;
         HANDLE f = CreateFileW(file, FILE_WRITE_ATTRIBUTES, 0, 0, OPEN_EXISTING, 0, 0);
@@ -56,9 +57,11 @@ int main(void)
         SetFileTime(f, 0, 0, &later);
         CloseHandle(f);
     }
-    exclude_reload_if_changed();
-    expect("nạp lại: có zalo.exe", exclude_has(L"zalo.exe"));
-    expect("nạp lại: không còn game.exe", !exclude_has(L"game.exe"));
+    expect("file đổi thì báo đã nạp lại", exclude_reload_if_changed());
+    expect("file không đổi thì không nạp lại", !exclude_reload_if_changed());
+    expect("nạp lại: còn 1 app", exclude_count() == 1);
+    expect("nạp lại: có e.exe", exclude_has(L"e.exe"));
+    expect("nạp lại: không còn b.exe", !exclude_has(L"b.exe"));
     expect("nạp lại thì đổi phiên bản", exclude_version() != v);
 
     DeleteFileW(file);

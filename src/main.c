@@ -80,6 +80,7 @@ void start(void)
     SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
 
     exclude_init();
+    macro_init();
     if (log_enabled()) g_key_evt = CreateEventW(0, FALSE, FALSE, 0);
     if (!emit_start() || !hook_start(g_key_evt)) {
         log_w(L"Không khởi động được hook (lỗi %u)", GetLastError());

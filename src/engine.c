@@ -11,6 +11,7 @@ static Telex g_tx;
 static volatile LONG g_enabled = 1;
 static volatile HWND g_notify;
 static volatile DWORD g_hotkey = HOTKEY_DEFAULT;
+static volatile LONG g_options;
 static int g_combo; /* đang giữ đúng Ctrl+Shift, chưa có phím nào khác */
 static int g_caps, g_caps_down;
 static unsigned char g_swallowed[256]; /* chặn lúc nhấn thì chặn luôn lúc nhả */
@@ -100,6 +101,8 @@ void engine_set_hotkey(DWORD hk)
 
 DWORD engine_hotkey(void) { return g_hotkey; }
 void engine_mouse_click(void) { g_mouse_reset = 1; }
+void engine_set_options(DWORD opts) { InterlockedExchange(&g_options, (LONG)(opts & OPT_ALL)); }
+DWORD engine_options(void) { return (DWORD)g_options; }
 void engine_set_notify(HWND w) { g_notify = w; }
 int engine_is_elevated(void) { return g_self_elevated; }
 int engine_enabled(void) { return g_enabled != 0; }
@@ -189,6 +192,35 @@ static int replay_if_pending(const KBDLLHOOKSTRUCT *k)
     return emit_push(0, 0, 0, (WORD)k->vkCode, (WORD)k->scanCode, fl, 0);
 }
 
+/* Phím kết thúc chữ tắt: dấu cách, dấu câu, Enter, Tab (không tính chữ số). */
+static int ends_macro(DWORD vk)
+{
+    if (vk == VK_SPACE || vk == VK_RETURN || vk == VK_TAB || vk == VK_OEM_102) return 1;
+    return (vk >= VK_OEM_1 && vk <= VK_OEM_3) || (vk >= VK_OEM_4 && vk <= VK_OEM_8);
+}
+
+/* Từ vừa gõ là chữ tắt: xóa nó, gửi nội dung (chia theo cỡ một lần phát), rồi phát lại
+ * phím kết thúc. Không đánh dấu chặn lúc nhả: lần nhả đi sau lần phát, đúng thứ tự. */
+static int expand_macro(const KBDLLHOOKSTRUCT *k)
+{
+    static wchar_t value[MACRO_VALUE_MAX];
+    wchar_t word[TELEX_MAX_CHARS];
+    int n, len, i;
+
+    if (!(g_options & OPT_MACRO) || g_tx.dead || g_tx.n == 0 || !ends_macro(k->vkCode)) return 0;
+    n = telex_render(&g_tx, word);
+    len = macro_lookup(word, n, value);
+    if (len <= 0) return 0;
+    for (i = 0; i < len; i += TELEX_MAX_CHARS) {
+        int chunk = len - i < TELEX_MAX_CHARS ? len - i : TELEX_MAX_CHARS;
+        int ok = emit_push(i ? 0 : n, value + i, chunk, 0, 0, 0, !i && g_fg_pad);
+        if (!ok && !i) return 0; /* hàng đợi đầy: để phím đi qua như thường */
+    }
+    emit_push(0, 0, 0, (WORD)k->vkCode, (WORD)k->scanCode, (k->flags & LLKHF_EXTENDED) ? KEYEVENTF_EXTENDEDKEY : 0, 0);
+    telex_reset(&g_tx);
+    return 1;
+}
+
 int engine_key(const KBDLLHOOKSTRUCT *k, DWORD mods, HWND fg)
 {
     DWORD vk = k->vkCode;
@@ -226,6 +258,8 @@ int engine_key(const KBDLLHOOKSTRUCT *k, DWORD mods, HWND fg)
         telex_reset(&g_tx);
     }
     if (is_modifier(vk)) return replay_if_pending(k);
+    g_tx.old_style = (g_options & OPT_OLD_STYLE) != 0;
+    g_tx.w_alone = (g_options & OPT_W_ALONE) != 0;
 
     if (!g_enabled || g_fg_blocked || g_fg_excluded ||
         (mods & (MOD_LCTRL | MOD_RCTRL | MOD_LALT | MOD_RALT | MOD_LWIN | MOD_RWIN))) {
@@ -236,6 +270,8 @@ int engine_key(const KBDLLHOOKSTRUCT *k, DWORD mods, HWND fg)
     } else if (vk >= 'A' && vk <= 'Z') {
         int upper = ((mods & (MOD_LSHIFT | MOD_RSHIFT)) != 0) ^ g_caps;
         sw = telex_key(&g_tx, (wchar_t)(upper ? vk : vk + 32), &e);
+    } else if (expand_macro(k)) {
+        return 1;
     } else if (inserts_one_char(vk)) {
         telex_break(&g_tx);
         sw = 0;

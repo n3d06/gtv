@@ -56,6 +56,20 @@ int exclude_has(const wchar_t *exe) { (void)exe; return 0; }
 LONG exclude_version(void) { return 0; }
 const wchar_t *path_base(const wchar_t *path) { return path; }
 
+/* ---- thay cho macro.c: hai chữ tắt, một cái dài hơn một lần phát ---- */
+
+static const wchar_t LONG_VALUE[] = L"Cộng hòa xã hội chủ nghĩa Việt Nam độc lập";
+
+int macro_lookup(const wchar_t *word, int n, wchar_t *out)
+{
+    const wchar_t *v = 0;
+    if (n == 2 && word[0] == 'k' && word[1] == 'o') v = L"không";
+    if (n == 2 && word[0] == 'v' && word[1] == 'n') v = LONG_VALUE;
+    if (!v) return 0;
+    lstrcpyW(out, v);
+    return lstrlenW(v);
+}
+
 /* ---- gõ phím ---- */
 
 static DWORD mod_bit(DWORD vk)
@@ -165,6 +179,28 @@ int main(void)
     T("dd vieetj<t", L"đ việt");
     T("bawts <f", L"bằt");
     T("hoa.<f", L"hoà");
+
+    /* Tùy chọn từ bảng điều khiển */
+    engine_set_options(OPT_OLD_STYLE);
+    T("hoaf", L"hòa");
+    engine_set_options(OPT_W_ALONE);
+    T("w ww", L"ư w");
+    engine_set_options(0);
+    T("hoaf w", L"hoà w");
+
+    /* Gõ tắt */
+    engine_set_options(OPT_MACRO);
+    T("ko ", L"không ");
+    T("ko.", L"không.");
+    T("toi ko di", L"toi không di");
+    T("kos ", L"kó ");
+    fresh(); type("ko"); tap('1');
+    expect_field("chữ số không bung chữ tắt", L"ko1");
+    T("vn ", L"Cộng hòa xã hội chủ nghĩa Việt Nam độc lập ");
+    fresh(); type("ko"); tap(VK_RETURN);
+    expect_field("ko + Enter", L"không");
+    engine_set_options(0);
+    T("ko ", L"ko ");
 
     /* Caps Lock */
     fresh(); tap(VK_CAPITAL); type("vieetj"); tap(VK_CAPITAL);
